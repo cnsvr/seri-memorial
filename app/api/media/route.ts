@@ -11,7 +11,9 @@ export async function GET(request: Request) {
     const daily = random
       ? (media.length ? media[Math.floor(Math.random() * media.length)] : null)
       : getDailyMedia(media);
-    return NextResponse.json({ daily, total: media.length });
+    return NextResponse.json({ daily, total: media.length }, {
+      headers: { 'Cache-Control': 'no-store, max-age=0' },
+    });
   } catch (err) {
     console.error('Media fetch error:', err);
     return NextResponse.json({ error: 'Failed to fetch media' }, { status: 500 });
