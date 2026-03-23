@@ -1,52 +1,66 @@
-# 🐾 Şeri Memorial
+# Şeri Memorial 🐾
 
-Şeri için yapılmış anı sayfası. Her gün farklı bir fotoğraf veya video gösterir.
+Şeri için yapılmış anı sitesi. Her gün rastgele bir fotoğraf veya video gösterir.
 
 ## Kurulum
 
-### 1. Cloudinary Hesabı (Ücretsiz)
-
-1. https://cloudinary.com → Free hesap aç
+### 1. Cloudinary hesabı aç (ücretsiz)
+1. [cloudinary.com](https://cloudinary.com) → Sign up
 2. Dashboard'dan şunları kopyala:
    - **Cloud Name**
    - **API Key**
    - **API Secret**
 
-### 2. Environment Variables
-
-`.env.example` dosyasını `.env.local` olarak kopyala ve doldur:
-
-```bash
-cp .env.example .env.local
+### 2. `.env.local` dosyasını düzenle
+```
+CLOUDINARY_CLOUD_NAME=buraya_yaz
+CLOUDINARY_API_KEY=buraya_yaz
+CLOUDINARY_API_SECRET=buraya_yaz
+ADMIN_PASSWORD=istedigin_sifre
 ```
 
-Sonra `.env.local` dosyasını düzenle.
-
-### 3. Local Çalıştırma
-
+### 3. Lokal çalıştır
 ```bash
 npm install
 npm run dev
 ```
-
 → http://localhost:3000
 
-### 4. Vercel Deploy (Ücretsiz)
+---
 
-1. Kodu GitHub'a push et
-2. https://vercel.com → GitHub reposunu import et
-3. Environment variables'ları Vercel dashboard'dan ekle
-4. Deploy!
+## Deploy (Vercel — Ücretsiz)
+
+### 1. GitHub'a yükle
+```bash
+git init
+git add .
+git commit -m "Şeri memorial"
+git remote add origin https://github.com/KULLANICI/seri-memorial.git
+git push -u origin main
+```
+
+### 2. Vercel'e bağla
+1. [vercel.com](https://vercel.com) → New Project → GitHub repoyu seç
+2. **Environment Variables** kısmına `.env.local` içindeki 4 değişkeni gir
+3. Deploy et → Site hazır!
+
+---
 
 ## Kullanım
 
-- **Ana sayfa:** `/` — Günün anısı
-- **Admin:** `/admin` — Fotoğraf/video yükle, sil
+| Sayfa | Ne yapar |
+|-------|----------|
+| `/` | Ana sayfa — günün medyasını gösterir |
+| `/admin` | Fotoğraf/video yükle, sil |
+| `/login` | Admin girişi |
 
-## Özellikler
+### Admin sayfası
+- Sürükle-bırak veya tıklayarak yükle
+- Birden fazla dosya aynı anda yüklenebilir
+- Fotoğraf ve video desteklenir
+- Hover yapınca "Sil" butonu çıkar
 
-- ✅ Her gün farklı bir medya (gün boyunca sabit)
-- ✅ Fotoğraf ve video desteği
-- ✅ Drag & drop yükleme
-- ✅ Şifre korumalı admin
-- ✅ Ücretsiz (Cloudinary + Vercel)
+### Günlük medya seçimi
+- Her gün tarih bazlı deterministik rastgele seçim yapılır
+- Gün içinde her girişte aynı medya gösterilir
+- Gece yarısı yeni güne geçince medya değişir

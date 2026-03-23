@@ -1,235 +1,186 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useEffect, useState, useRef, DragEvent } from 'react';
 import type { MediaItem } from '@/lib/cloudinary';
 
 export default function AdminPage() {
-  const [authed, setAuthed] = useState(false);
-  const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [authLoading, setAuthLoading] = useState(false);
-
   const [media, setMedia] = useState<MediaItem[]>([]);
-  const [loadingMedia, setLoadingMedia] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [message, setMessage] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const loadMedia = useCallback(async () => {
-    setLoadingMedia(true);
-    try {
-      const r = await fetch('/api/media/all');
-      if (r.status === 401) { setAuthed(false); return; }
-      const data = await r.json();
-      setMedia(data.media || []);
-    } finally {
-      setLoadingMedia(false);
+  async function fetchMedia() {
+    setLoading(true);
+    const res = await fetch('/api/media/all');
+    if (res.ok) {
+      const data = await res.json();
+      setMedia(data.media ?? []);
     }
-  }, []);
+    setLoading(false);
+  }
 
   useEffect(() => {
-    // Check if already authed
-    fetch('/api/media/all').then((r) => {
-      if (r.ok) { setAuthed(true); r.json().then((d) => setMedia(d.media || [])); }
-    });
+    fetchMedia();
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthLoading(true);
-    setAuthError('');
-    const r = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-    setAuthLoading(false);
-    if (r.ok) { setAuthed(true); loadMedia(); }
-    else setAuthError('Şifre yanlış.');
-  };
-
-  const handleLogout = async () => {
-    await fetch('/api/auth', { method: 'DELETE' });
-    setAuthed(false);
-    setMedia([]);
-    setPassword('');
-  };
-
-  const uploadFiles = async (files: FileList | File[]) => {
-    const arr = Array.from(files);
+  async function uploadFiles(files: FileList | File[]) {
+    const fileArray = Array.from(files);
     setUploading(true);
-    for (let i = 0; i < arr.length; i++) {
-      const file = arr[i];
-      setUploadProgress(`Yükleniyor: ${file.name} (${i + 1}/${arr.length})`);
+    setMessage('');
+    let successCount = 0;
+    for (const file of fileArray) {
       const fd = new FormData();
       fd.append('file', file);
-      await fetch('/api/upload', { method: 'POST', body: fd });
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (res.ok) successCount++;
     }
     setUploading(false);
-    setUploadProgress('');
-    loadMedia();
-  };
+    setMessage(`${successCount} dosya yüklendi ✓`);
+    fetchMedia();
+    setTimeout(() => setMessage(''), 3000);
+  }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.length) uploadFiles(e.target.files);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
-  };
-
-  const handleDelete = async (item: MediaItem) => {
+  async function deleteMedia(item: MediaItem) {
     if (!confirm(`"${item.public_id}" silinsin mi?`)) return;
-    await fetch('/api/delete', {
+    const res = await fetch('/api/delete', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ public_id: item.public_id, resource_type: item.resource_type }),
     });
-    loadMedia();
-  };
+    if (res.ok) {
+      setMedia((prev) => prev.filter((m) => m.public_id !== item.public_id));
+    }
+  }
 
-  if (!authed) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
-        <div className="w-full max-w-sm px-6">
-          <div className="text-center mb-10">
-            <h1 className="text-2xl font-light tracking-[0.3em] uppercase text-[#f5f0e8]">Şeri</h1>
-            <p className="text-xs tracking-widest text-[#6b6259] mt-1">admin</p>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="şifre"
-              className="w-full bg-[#111] border border-[#2a2520] rounded-lg px-4 py-3 text-[#f5f0e8] placeholder-[#4a4238] focus:outline-none focus:border-[#5a5048] transition-colors text-sm"
-            />
-            {authError && <p className="text-red-400/80 text-xs text-center">{authError}</p>}
-            <button
-              type="submit"
-              disabled={authLoading}
-              className="w-full bg-[#2a2520] hover:bg-[#3a3530] text-[#d5cfc8] py-3 rounded-lg text-sm tracking-widest transition-colors disabled:opacity-50"
-            >
-              {authLoading ? '...' : 'giriş'}
-            </button>
-          </form>
-          <div className="mt-6 text-center">
-            <a href="/" className="text-xs text-[#4a4238] hover:text-[#6b6259] transition-colors">
-              ← ana sayfaya dön
-            </a>
-          </div>
-        </div>
-      </main>
-    );
+  async function logout() {
+    await fetch('/api/auth', { method: 'DELETE' });
+    window.location.href = '/';
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-[#f5f0e8] pb-20">
+    <main className="min-h-screen bg-[#0a0a0a] px-4 py-8 max-w-5xl mx-auto">
       {/* Header */}
-      <header className="flex justify-between items-center px-6 py-5 border-b border-[#1a1510]">
-        <div className="flex items-center gap-3">
-          <a href="/" className="text-xs text-[#4a4238] hover:text-[#6b6259] transition-colors">←</a>
-          <h1 className="text-lg font-light tracking-[0.3em] uppercase">Şeri / Admin</h1>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="text-xs text-[#4a4238] hover:text-[#8a7f72] transition-colors tracking-widest"
-        >
-          çıkış
-        </button>
-      </header>
-
-      <div className="max-w-4xl mx-auto px-6 pt-8 space-y-8">
-        {/* Upload area */}
-        <div
-          className={`border-2 border-dashed rounded-2xl p-10 text-center transition-colors ${
-            dragOver ? 'border-[#5a5048] bg-[#1a1510]' : 'border-[#2a2520] bg-[#0f0e0c]'
-          }`}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-        >
-          {uploading ? (
-            <div className="space-y-3">
-              <div className="w-6 h-6 border border-[#8a7f72] border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-sm text-[#8a7f72]">{uploadProgress}</p>
-            </div>
-          ) : (
-            <>
-              <p className="text-4xl mb-3">🐾</p>
-              <p className="text-[#8a7f72] text-sm mb-1">Fotoğraf veya video sürükle & bırak</p>
-              <p className="text-[#4a4238] text-xs mb-4">JPG, PNG, GIF, MP4, MOV, vb.</p>
-              <label className="cursor-pointer bg-[#2a2520] hover:bg-[#3a3530] text-[#d5cfc8] px-6 py-2.5 rounded-lg text-sm tracking-wider transition-colors inline-block">
-                Dosya seç
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*,video/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-              </label>
-            </>
-          )}
-        </div>
-
-        {/* Media grid */}
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm tracking-[0.2em] uppercase text-[#8a7f72]">
-              Anılar ({media.length})
-            </h2>
-            {loadingMedia && (
-              <div className="w-4 h-4 border border-[#8a7f72] border-t-transparent rounded-full animate-spin" />
-            )}
-          </div>
-
-          {media.length === 0 && !loadingMedia && (
-            <p className="text-center text-[#4a4238] py-12 text-sm">Henüz hiç anı yok.</p>
-          )}
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {media.map((item) => (
-              <div
-                key={item.public_id}
-                className="group relative aspect-square rounded-xl overflow-hidden bg-[#111]"
-              >
-                {item.resource_type === 'image' ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.secure_url}
-                    alt="Şeri"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <video
-                    src={item.secure_url}
-                    className="w-full h-full object-cover"
-                    muted
-                  />
-                )}
-                {/* Overlay */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center">
-                  <button
-                    onClick={() => handleDelete(item)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity bg-red-900/80 text-red-200 px-3 py-1.5 rounded-lg text-xs"
-                  >
-                    sil
-                  </button>
-                </div>
-                {/* Video badge */}
-                {item.resource_type === 'video' && (
-                  <div className="absolute top-2 right-2 bg-black/60 text-[#8a7f72] text-xs px-1.5 py-0.5 rounded">
-                    ▶
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <h1 className="text-3xl font-[family-name:var(--font-playfair)] text-[#c9a96e]">
+            Şeri Admin
+          </h1>
+          <p className="text-[#5a5048] text-sm mt-1">{media.length} medya dosyası</p>
+        </div>
+        <div className="flex gap-3">
+          <a
+            href="/"
+            className="px-4 py-2 text-sm border border-[#2a2520] rounded-lg text-[#8a7a6a] hover:border-[#c9a96e] hover:text-[#c9a96e] transition-colors"
+          >
+            Ana sayfa
+          </a>
+          <button
+            onClick={logout}
+            className="px-4 py-2 text-sm border border-[#2a2520] rounded-lg text-[#8a7a6a] hover:border-red-800 hover:text-red-400 transition-colors"
+          >
+            Çıkış
+          </button>
         </div>
       </div>
+
+      {/* Upload Area */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        onClick={() => inputRef.current?.click()}
+        className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all mb-8 ${
+          dragOver
+            ? 'border-[#c9a96e] bg-[#c9a96e10]'
+            : 'border-[#2a2520] hover:border-[#4a4038] bg-[#111008]'
+        }`}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={(e) => e.target.files && uploadFiles(e.target.files)}
+        />
+        {uploading ? (
+          <div className="flex items-center justify-center gap-3 text-[#c9a96e]">
+            <div className="w-5 h-5 border-2 border-[#c9a96e] border-t-transparent rounded-full animate-spin" />
+            <span>Yükleniyor...</span>
+          </div>
+        ) : (
+          <>
+            <p className="text-4xl mb-3">📸</p>
+            <p className="text-[#8a7a6a]">
+              Fotoğraf veya video yükle
+            </p>
+            <p className="text-[#4a4540] text-sm mt-1">
+              Sürükle bırak veya tıkla — birden fazla dosya desteklenir
+            </p>
+          </>
+        )}
+      </div>
+
+      {message && (
+        <p className="text-green-400 text-sm text-center mb-6">{message}</p>
+      )}
+
+      {/* Media Grid */}
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="w-8 h-8 border-2 border-[#c9a96e] border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : media.length === 0 ? (
+        <p className="text-center text-[#4a4540] py-16">Henüz medya yok.</p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {media.map((item) => (
+            <div
+              key={item.public_id}
+              className="group relative rounded-xl overflow-hidden bg-[#161412] border border-[#1e1a16] aspect-square"
+            >
+              {item.resource_type === 'image' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.secure_url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <video
+                  src={item.secure_url}
+                  className="w-full h-full object-cover"
+                  muted
+                  preload="metadata"
+                />
+              )}
+              {/* Overlay */}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <button
+                  onClick={() => deleteMedia(item)}
+                  className="bg-red-600/80 hover:bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Sil
+                </button>
+              </div>
+              {/* Video badge */}
+              {item.resource_type === 'video' && (
+                <span className="absolute top-2 left-2 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
+                  ▶
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </main>
   );
 }
