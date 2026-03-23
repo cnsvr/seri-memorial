@@ -8,7 +8,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/media?random=true')
+    fetch(`/api/media?random=true&t=${Date.now()}`)
       .then((r) => r.json())
       .then((data) => {
         setMedia(data.daily ?? null);
